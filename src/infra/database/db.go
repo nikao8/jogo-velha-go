@@ -12,16 +12,16 @@ import (
 )
 
 func GetDBConnection() (*gorm.DB, error) {
-	dsn := "host=localhost user=postgres password=830083 dbname=jogo_velha port=5432 TimeZone=America/Sao_Paulo"
+	dsn := "host=localhost user=postgres password=123456 dbname=jogo_velha port=5432 TimeZone=America/Sao_Paulo"
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
 		DisableForeignKeyConstraintWhenMigrating: false,
 		Logger: logger.New(
-			log.New(os.Stdout, "\r\n", log.LstdFlags), // Altere a saída de log conforme necessário
+			log.New(os.Stdout, "\r\n", log.LstdFlags),
 			logger.Config{
-				SlowThreshold:             time.Second, // Limite para consultas lentas
-				LogLevel:                  logger.Info, // Nível de log (Info exibirá SQLs)
-				IgnoreRecordNotFoundError: true,        // Ignorar erros de registro não encontrado
-				Colorful:                  true,        // Ativar cores no log
+				SlowThreshold:             time.Second,
+				LogLevel:                  logger.Info,
+				IgnoreRecordNotFoundError: true,
+				Colorful:                  true,
 			},
 		),
 	})
@@ -37,7 +37,7 @@ func UpDatabase(db *gorm.DB) error {
 	err := db.AutoMigrate(
 		&domain_entities.Player{},
 		&domain_entities.Game{},
-		&domain_entities.Move{},
+		//&domain_entities.Move{},
 		&domain_entities.Position{},
 	)
 

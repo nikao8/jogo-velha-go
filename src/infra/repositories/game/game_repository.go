@@ -140,3 +140,124 @@ func (r gameRepository) Start(gameID uint) error {
 
 	return nil
 }
+
+func (r gameRepository) ListPositions(gameID uint) (*domain_contracts_repositories_game_dto.OutputListPositionsDto, error) {
+
+	var positions []domain_entities.Position
+
+	err := r.db.Table("positions p").
+		Joins("INNER JOIN games g ON g.id = p.game_id").
+		Where("g.id = ? AND avaible IS true", gameID).
+		Order("p.y DESC, p.x ASC").
+		Find(&positions).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &domain_contracts_repositories_game_dto.OutputListPositionsDto{
+		Data: func() []domain_contracts_repositories_game_dto.ItemListPositionsDto {
+			data := make([]domain_contracts_repositories_game_dto.ItemListPositionsDto, len(positions))
+
+			for i, p := range positions {
+				data[i] = domain_contracts_repositories_game_dto.ItemListPositionsDto{
+					X:       p.X,
+					Y:       p.Y,
+					Value:   p.Value,
+					Avaible: p.Avaible,
+				}
+			}
+			return data
+		}(),
+	}, nil
+}
+func (r gameRepository) NextPlayerToMove(gameID uint) (*domain_entities.Player, error) {
+	var game domain_entities.Game
+
+	err := r.db.Model(&domain_entities.Game{}).Where("id = ?", gameID).
+		Preload("PlayerOne").Preload("PlayerTwo").
+		Take(&game).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	if game.ID == 0 {
+		return nil, errors.New("game not found")
+	}
+
+	var maxMoveOrder *uint
+
+	err = r.db.Table("positions p").
+		Select("MAX(p.move_order)").
+		Joins("INNER JOIN games g ON g.id = p.game_id").
+		Where("p.avaible IS false AND g.id = ?", gameID).
+		Scan(&maxMoveOrder).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	if maxMoveOrder == nil { // nao houve nenhuma jogada, retorna jogador 1
+		return game.PlayerOne, nil
+	}
+
+	var lastPlayerID *uint = nil
+
+	err = r.db.Table("positions p").
+		Select("p.player_id").
+		Joins("INNER JOIN games g ON g.id = p.game_id").
+		Where("g.id = ? AND p.avaible IS false AND p.move_order = ?", gameID, *maxMoveOrder).
+		Scan(&lastPlayerID).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	if lastPlayerID == &game.PlayerOneID {
+		return game.PlayerTwo, nil
+	}
+
+	return game.PlayerOne, nil
+}
+
+func (r gameRepository) Move(gameID uint, playerID uint, position domain_contracts_repositories_game_dto.InputMoveDto) (*domain_contracts_repositories_game_dto.OutputMoveDto, error) {
+
+	var game domain_entities.Game
+
+	err := r.db.Model(&domain_entities.Game{}).
+		Where("id = ? AND (player_one_id = ? OR player_two_id = ?)", gameID, playerID, playerID).
+		Take(&game).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	if game.ID == 0 {
+		return nil, errors.New("game not found")
+	}
+
+	player, err := r.NextPlayerToMove(game.ID)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if player.ID != playerID {
+		return nil, errors.New("invalid player to move")
+	}
+
+	positions, err := r.ListPositions(gameID)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, p := range positions.Data {
+		if !p.Avaible && (p.X == position.X && p.Y == position.Y) {
+			return nil, errors.New("invalid position to move")
+		}
+	}
+
+	//fazer logica de verificar se ha ganhador / velha, atualisar o game etc..
+	return nil, nil
+}
